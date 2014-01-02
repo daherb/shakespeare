@@ -23,12 +23,45 @@ sub train
     my $tf;
     foreach my $f (@ARGV)
     {
-	open($tf, '<', $f)
+	open($tf, '<', $f);
+	my $line;
+	my @history;
+	while($line = <$tf>)
+	{
+	    chomp($line);
+	    my @token;
+	    # Read word n-grams
+	    if ($opt_w)
+	    {
+		# Separate punctation characters and words with a space
+		$line =~ s/([.;:!?])/ $1 /g;
+		@token = split(/\s+/,$line);
+		@token = map { "$_ "} @token;
+	    }
+	    # Read character n-grams
+	    else
+	    {
+		@token = split(//,$line);
+	    }
+	    my $t;
+	    foreach $t (@token)
+	    {
+		$language_model{join '', @history}{$t}++;
+		push(@history, $t);
+		# Keep history to size n
+		shift @history if ($#history > ( $opt_n - 2));
+		print join('-', @history)."\n";
+		# Clear after a sentence
+		@history = () if ($t=~/([.;:!?])/);
+	    }
+	}
+	close($tf);
     }
 }
 
 sub generate
 {
+    print Dumper(%language_model);
     print "generation\n";
 }
 
@@ -44,17 +77,21 @@ sub load
 
 # sub main
 {
+    # Check for command line arguments
     $Getopt::Std::STANDARD_HELP_VERSION = 1;
     if (( ! getopts('wcn:l:d:s:r:' ) ) or (! ((defined($opt_w) or defined($opt_c)) and defined($opt_l))))
     {
 	HELP_MESSAGE;
     }
+    # Step 0:
+    # Set n if not already set
+    our $opt_n = 3 if (! defined($opt_n) );
     # Step 1:
     # Load stored language model if given with switch -r
     load if defined($opt_r);
     # Step 2:
     # Train on additional text files given
-    train if ($#ARGV >0);
+    train if ($#ARGV >= 0);
     # Step 3:
     # Store new language model to a file if it is given with switch -s
     store if defined($opt_s);
